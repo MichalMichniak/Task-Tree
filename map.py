@@ -1,4 +1,5 @@
 from enum import Enum
+from platform import node
 from typing import List
 import pygame as pg
 import numpy as np
@@ -16,7 +17,7 @@ class Screen_Mode(Enum):
     edit = 2
     organizing = 3
 
-def map_window_func(node_lst,node_lst_lock : threading.Lock,pipe_to_main):
+def map_window_func(node_lst : List[Node],node_lst_lock : threading.Lock,pipe_to_main):
     """
     Initialize and menage pygame window
 
@@ -38,8 +39,8 @@ def map_window_func(node_lst,node_lst_lock : threading.Lock,pipe_to_main):
     obj_follow = False
     prev_mouse_pos = (0,0)
     dragged_obj_nr = None
-    Force_x2 = 800000
-    Force_x = 0.1
+    Force_x2 = 6000000
+    Force_x = 1
     arrow_m = 3
     default_mouse_left = False
     while run:
@@ -63,6 +64,7 @@ def map_window_func(node_lst,node_lst_lock : threading.Lock,pipe_to_main):
                         screen_mode = Screen_Mode.default
                     elif screen_mode == Screen_Mode.default:
                         screen_mode = Screen_Mode.organizing
+                        pass
                 if event.key == pg.K_c:
                     pipe_to_main.send([None])
                     mouse = pg.mouse.get_pos()
@@ -105,43 +107,56 @@ def map_window_func(node_lst,node_lst_lock : threading.Lock,pipe_to_main):
                 node_lst[dragged_obj_nr].move(mouse_pos[0]-prev_mouse_pos[0],mouse_pos[1]-prev_mouse_pos[1])
                 prev_mouse_pos = mouse_pos
         if screen_mode == Screen_Mode.organizing:
-            for n,i in enumerate(node_lst):
+            for n, i in enumerate(node_lst):
                 Dx = 0
                 Dy = 0
+
+                dx = i.x_-node_lst[0].x_
+                dy = i.y_-node_lst[0].y_
+                z = np.sqrt(dy**2 + dx**2)
+                if z>0:
+                    Dx -= (t*(np.sign(dx)*abs(dx+10)/z) if (t:=np.log(z))>1 else 0) * len(node_lst)
+                    Dy -= (t*(np.sign(dy)*abs(dy+10)/z) if (t:=np.log(z))>1 else 0) * len(node_lst)
+
+
                 for j in node_lst:
                     dx = i.x_-j.x_
                     dy = i.y_-j.y_
                     if dx == 0 and dy == 0:
                         continue
                     z = np.sqrt(dy**2 + dx**2)
-                    Dx += Force_x2*dx/(z**3) - (t*dx/z if (t:=np.log(z))>0 else 0)
-                    Dy += Force_x2*dy/(z**3) - (t*dy/z if (t:=np.log(z))>0 else 0)
+                    Dx += Force_x2*dx/(z**3)# - (t*dx/z if (t:=np.log(z))>0 else 0)
+                    Dy += Force_x2*dy/(z**3)# - (t*dy/z if (t:=np.log(z))>0 else 0)
                 for j in i.ancestors:
                     dx = i.x_-j.x_
                     dy = i.y_-j.y_
                     if dx == 0 and dy == 0:
                         continue
                     #z = np.sqrt(dy**2 + dx**2)
-                    Dx += -Force_x*dx
-                    Dy += -Force_x*dy
+                    z_x = abs(dx) #if abs(dx) < 10000 else 10000
+                    z_y = abs(dy) #if abs(dy) < 10000 else 10000
+                    Dx += -Force_x*np.sign(dx)*z_x
+                    Dy += -Force_x*np.sign(dy)*z_y
                 for j in i.descendants:
                     dx = i.x_-j.x_
                     dy = i.y_-j.y_
                     if dx == 0 and dy == 0:
                         continue
                     z = np.sqrt(dy**2 + dx**2)
-                    Dx -= Force_x2*dx/(z**3) - (t*dx/z if (t:=np.log(z))>0 else 0)
-                    Dy -= Force_x2*dy/(z**3) - (t*dy/z if (t:=np.log(z))>0 else 0)
-                if abs(Dx) > 1000:
-                    Dx = np.sign(Dx) * 1000
-                if abs(Dy) > 1000:
-                    Dy = np.sign(Dy) * 1000
+                    Dx -= Force_x2*dx/(z**3)# - (t*dx/z if (t:=np.log(z))>0 else 0)
+                    Dy -= Force_x2*dy/(z**3)# - (t*dy/z if (t:=np.log(z))>0 else 0)
+
+                g = np.log(len(node_lst))
+                if abs(Dx) > 5/g or abs(Dy) > 5/g:
+                    Dx = np.sign(Dx) * 5/g
+                    Dy = np.sign(Dy) * 5/g
+                
                 node_lst[n].next_x = i.x_ + Dx
                 node_lst[n].next_y = i.y_ + Dy
 
-            for n,i in enumerate(node_lst[1:]):
-                node_lst[n+1].x_ = i.next_x
-                node_lst[n+1].y_ = i.next_y
+            for n,i in enumerate(node_lst[2:]):
+                node_lst[n+2].x_ = i.next_x
+                node_lst[n+2].y_ = i.next_y
         ###### display objects section #####
         temp = None
         if screen_mode == Screen_Mode.default or screen_mode == Screen_Mode.organizing:

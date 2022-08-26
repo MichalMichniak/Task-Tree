@@ -23,6 +23,7 @@ class Node:
         self.description = desription
         ### initialization of message box
         self.message_box : Message_Box = Message_Box(name, self.description)
+
         self.x_ = x
         self.y_ = y
         self.next_x = x
